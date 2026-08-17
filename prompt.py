@@ -15,6 +15,7 @@
 
 """System prompt loader with runtime injection."""
 
+import os
 import platform
 from datetime import datetime
 from pathlib import Path
@@ -60,15 +61,23 @@ def load_system_prompt() -> str:
         platform_str = f"Linux ({platform.release().split('-')[0]})"
         shell_str = "bash"
 
-    # Inject runtime values (use relative paths for virtual filesystem compatibility)
+    # Which SCQO deployment (sim / qblox / qm) this server was launched for,
+    # derived from the config file the launch script selected.
+    scqo_config = os.environ.get("SCQO_AGENT_CONFIG", "")
+    scqo_deployment = Path(scqo_config).stem if scqo_config else "unconfigured"
+
+    # Inject runtime values. Paths are relative for virtual-filesystem
+    # compatibility and always POSIX-style — a backslash path pasted into
+    # the prompt would mismatch the virtual FS on Windows.
     replacements = {
         "{{DATETIME}}": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "{{PLATFORM}}": platform_str,
         "{{SHELL}}": shell_str,
-        "{{SCRIPTS_DIR}}": str(SCRIPTS_DIR.relative_to(ROOT_DIR)),
-        "{{SKILLS_DIR}}": str(SKILLS_DIR.relative_to(ROOT_DIR)),
-        "{{DOCUMENTS_DIR}}": str(DOCUMENTS_DIR.relative_to(ROOT_DIR)),
-        "{{MEMORY_DIR}}": str(MEMORY_DIR.relative_to(ROOT_DIR)),
+        "{{SCQO_DEPLOYMENT}}": scqo_deployment,
+        "{{SCRIPTS_DIR}}": SCRIPTS_DIR.relative_to(ROOT_DIR).as_posix(),
+        "{{SKILLS_DIR}}": SKILLS_DIR.relative_to(ROOT_DIR).as_posix(),
+        "{{DOCUMENTS_DIR}}": DOCUMENTS_DIR.relative_to(ROOT_DIR).as_posix(),
+        "{{MEMORY_DIR}}": MEMORY_DIR.relative_to(ROOT_DIR).as_posix(),
     }
 
     for placeholder, value in replacements.items():

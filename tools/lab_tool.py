@@ -15,9 +15,11 @@
 
 """Lab tool for deep agent - experiment management API."""
 
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from langchain_core.tools import tool
 
@@ -104,9 +106,9 @@ def run_experiment(
         experiment_name: Name of the experiment to run (use lab action='info' to see available)
         params: Dictionary of experiment parameters
         notes: Optional notes to attach to the experiment run
-        python_path: Path to Python interpreter to use (e.g., '/path/to/venv/bin/python').
-                     If not specified, uses system 'python'. Check skills/memory for the
-                     correct Python environment for your experiments.
+        python_path: Path to a Python interpreter for non-scqo experiments only.
+                     scqo_* experiments always run under the deployment's SCQO
+                     venv (SCQO_AGENT_PYTHON) — never pass python_path for them.
 
     Returns experiment results including ID, status, and any generated data arrays.
     """
@@ -197,6 +199,34 @@ def _get_schema(experiment_name: str) -> dict:
     }
 
 
+def _resolve_python(experiment_name: str, python_path: str = None):
+    """Pick the interpreter for an experiment subprocess.
+
+    scqo_* experiments MUST run under the deployment's SCQO venv, named by
+    the SCQO_AGENT_PYTHON environment variable (set by launch/run-*.ps1) —
+    a caller-supplied python_path is deliberately ignored for them so the
+    agent cannot redirect a hardware run to an arbitrary interpreter.
+
+    Returns (python_path, error_dict): exactly one is non-None.
+    """
+    if experiment_name.startswith("scqo_"):
+        scqo_python = os.environ.get("SCQO_AGENT_PYTHON", "").strip()
+        if not scqo_python:
+            return None, {
+                "error": (
+                    "SCQO_AGENT_PYTHON is not set. scqo_* experiments run under "
+                    "the SCQO backend venv chosen at deployment time; start the "
+                    "server via launch/run-sim.ps1, run-qblox.ps1, or run-qm.ps1."
+                )
+            }
+        if not Path(scqo_python).exists():
+            return None, {
+                "error": f"SCQO_AGENT_PYTHON points to a missing interpreter: {scqo_python}"
+            }
+        return scqo_python, None
+    return python_path, None
+
+
 def _run_experiment(
     experiment_name: str, params: dict, notes: str = "", python_path: str = None
 ) -> dict:
@@ -216,11 +246,16 @@ def _run_experiment(
         }
     params = runner.resolve_params(params, schema)
 
+    python_path, python_error = _resolve_python(experiment_name, python_path)
+    if python_error:
+        return python_error
+
     # Generate experiment ID and timestamp BEFORE running
     # This allows real-time log file access during execution
+    # A short random suffix keeps two same-second runs from colliding.
     now = datetime.now(timezone.utc)
     timestamp = now.isoformat().replace("+00:00", "Z")
-    exp_id = f"{now.strftime('%Y%m%d_%H%M%S')}_{experiment_name}"
+    exp_id = f"{now.strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:4]}_{experiment_name}"
 
     # Create experiment directory and log file path
     exp_dir = DATA_DIR / exp_id
@@ -233,8 +268,10 @@ def _run_experiment(
             experiment_name,
             params,
             SCRIPTS_DIR,
+            timeout=int(os.environ.get("SCQO_AGENT_TIMEOUT_S", "1800")),
             python_path=python_path,
             log_file=log_file,
+            extra_env={"QCA_EXP_ID": exp_id},
         )
     except ValueError as e:
         # Parameter validation error - provide helpful info
@@ -247,8 +284,12 @@ def _run_experiment(
     except RuntimeError as e:
         return {"error": f"Experiment failed: {e}", "id": exp_id}
 
-    # Extract target from params
+    # Extract target from params (scqo wrappers use a `targets` list)
     target = params.get("target")
+    if target is None:
+        targets = params.get("targets")
+        if isinstance(targets, list) and all(isinstance(t, str) for t in targets):
+            target = ",".join(targets)
 
     # Create ExperimentResult
     # Scripts return "data" but we store it as "results"

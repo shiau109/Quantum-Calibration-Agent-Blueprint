@@ -81,8 +81,10 @@ def save_experiment(result: ExperimentResult, data_dir: Path) -> None:
     )
     exp_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create HDF5 file: HHMMSS_type.h5
-    filename = f"{dt.hour:02d}{dt.minute:02d}{dt.second:02d}_{result.type}.h5"
+    # Create HDF5 file named by the experiment id, which is unique — a
+    # HHMMSS_type stem collides when two runs of one experiment start in
+    # the same second, silently overwriting the earlier file and DB row.
+    filename = f"{result.id}.h5"
     file_path = exp_dir / filename
 
     # Write HDF5 file

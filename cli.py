@@ -59,6 +59,16 @@ load_dotenv(Path(__file__).parent / ".env")
 # Ensure local imports work
 sys.path.insert(0, str(Path(__file__).parent))
 
+# Windows consoles default to a legacy codepage (e.g. cp950), which cannot
+# encode the ✓/→ glyphs rich prints — reconfigure stdio to UTF-8 so output
+# never dies with UnicodeEncodeError.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):
+            pass
+
 __version__ = "0.1.0"
 
 # Default model for QCA

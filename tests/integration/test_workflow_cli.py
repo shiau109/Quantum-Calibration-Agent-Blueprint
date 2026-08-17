@@ -195,6 +195,8 @@ class TestWorkflowListCommand:
             [sys.executable, str(CLI_PATH), "workflow", "list"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=str(workflow_dir.parent),
             env={**subprocess.os.environ, "QCAL_DATA_DIR": str(workflow_dir)},
         )
@@ -210,6 +212,8 @@ class TestWorkflowListCommand:
             [sys.executable, str(CLI_PATH), "workflow", "list", "--human"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=str(workflow_dir.parent),
             env={**subprocess.os.environ, "QCAL_DATA_DIR": str(workflow_dir)},
         )
@@ -223,6 +227,8 @@ class TestWorkflowListCommand:
             [sys.executable, str(CLI_PATH), "workflow", "list", "--human"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=str(temp_data_dir.parent),
             env={**subprocess.os.environ, "QCAL_DATA_DIR": str(temp_data_dir)},
         )
@@ -239,6 +245,8 @@ class TestWorkflowShowCommand:
             [sys.executable, str(CLI_PATH), "workflow", "show", sample_workflow["id"]],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=str(workflow_dir.parent),
             env={**subprocess.os.environ, "QCAL_DATA_DIR": str(workflow_dir)},
         )
@@ -261,6 +269,8 @@ class TestWorkflowShowCommand:
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=str(workflow_dir.parent),
             env={**subprocess.os.environ, "QCAL_DATA_DIR": str(workflow_dir)},
         )
@@ -274,6 +284,8 @@ class TestWorkflowShowCommand:
             [sys.executable, str(CLI_PATH), "workflow", "show", "nonexistent"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=str(temp_data_dir.parent),
             env={**subprocess.os.environ, "QCAL_DATA_DIR": str(temp_data_dir)},
         )
@@ -296,6 +308,8 @@ class TestWorkflowStatusCommand:
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=str(workflow_dir.parent),
             env={**subprocess.os.environ, "QCAL_DATA_DIR": str(workflow_dir)},
         )
@@ -319,6 +333,8 @@ class TestWorkflowStatusCommand:
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=str(workflow_dir.parent),
             env={**subprocess.os.environ, "QCAL_DATA_DIR": str(workflow_dir)},
         )
@@ -343,6 +359,8 @@ class TestWorkflowValidateCommand:
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=str(workflow_dir.parent),
             env={**subprocess.os.environ, "QCAL_DATA_DIR": str(workflow_dir)},
         )
@@ -368,6 +386,8 @@ class TestWorkflowValidateCommand:
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=str(temp_data_dir.parent),
             env={**subprocess.os.environ, "QCAL_DATA_DIR": str(temp_data_dir)},
         )
@@ -386,6 +406,8 @@ class TestWorkflowValidateCommand:
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=str(workflow_dir.parent),
             env={**subprocess.os.environ, "QCAL_DATA_DIR": str(workflow_dir)},
         )
@@ -410,6 +432,8 @@ class TestWorkflowHistoryCommand:
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=str(workflow_dir.parent),
             env={**subprocess.os.environ, "QCAL_DATA_DIR": str(workflow_dir)},
         )
@@ -432,6 +456,8 @@ class TestWorkflowHistoryCommand:
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=str(workflow_dir.parent),
             env={**subprocess.os.environ, "QCAL_DATA_DIR": str(workflow_dir)},
         )
@@ -452,6 +478,8 @@ class TestWorkflowHistoryCommand:
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=str(workflow_dir.parent),
             env={**subprocess.os.environ, "QCAL_DATA_DIR": str(workflow_dir)},
         )
@@ -469,6 +497,8 @@ class TestWorkflowNodesCommand:
             [sys.executable, str(CLI_PATH), "workflow", "nodes", sample_workflow["id"]],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=str(workflow_dir.parent),
             env={**subprocess.os.environ, "QCAL_DATA_DIR": str(workflow_dir)},
         )
@@ -490,6 +520,8 @@ class TestWorkflowNodesCommand:
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=str(workflow_dir.parent),
             env={**subprocess.os.environ, "QCAL_DATA_DIR": str(workflow_dir)},
         )
@@ -522,6 +554,8 @@ class TestWorkflowPausedStatus:
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=str(temp_data_dir.parent),
             env={**subprocess.os.environ, "QCAL_DATA_DIR": str(temp_data_dir)},
         )
@@ -552,6 +586,8 @@ class TestWorkflowCompletedStatus:
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=str(temp_data_dir.parent),
             env={**subprocess.os.environ, "QCAL_DATA_DIR": str(temp_data_dir)},
         )

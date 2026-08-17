@@ -16,11 +16,19 @@
 """Tests for tools/find_tool.py."""
 
 import subprocess
+import sys
 from unittest.mock import patch, MagicMock
 
 import pytest
 
 from tools.find_tool import find
+
+# find_tool shells out to the Unix `find` command; on Windows, find.exe is an
+# unrelated text-search tool. The tool is not registered with the agent, so it
+# is skipped rather than ported.
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32", reason="find_tool wraps the Unix find command"
+)
 
 
 @pytest.fixture

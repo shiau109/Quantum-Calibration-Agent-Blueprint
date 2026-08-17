@@ -1,7 +1,37 @@
-# Quantum Calibration Agent Blueprint
+# Quantum Calibration Agent Blueprint — SCQO edition
 
 ![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)
 ![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)
+
+This fork (branch `scqo-main`) drives the **SCQO** superconducting-qubit
+lab-control stack instead of the upstream mock experiments, and runs on
+**Windows**. All 37 SCQO experiments are exposed as generated `scqo_*`
+wrappers; runs execute in subprocesses under the SCQO backend venvs and
+persist to the SCQO datastore (suggestions stay pending for human
+acceptance — the agent never writes device parameters).
+
+## SCQO quick start
+
+```powershell
+# 1) one-time: create the agent venv (needs uv)
+uv venv --python 3.12 .venv
+uv pip install --python .venv\Scripts\python.exe -e ".[test]" psutil langchain-anthropic langchain-openai
+
+# 2) put ANTHROPIC_API_KEY in .env (or flip the launch script to the lab's Ising endpoint)
+
+# 3) start against the simulator (chipA / simulated — no hardware touched)
+launch\run-sim.ps1
+```
+
+`launch/run-qblox.ps1` and `launch/run-qm.ps1` target real hardware — Phase C,
+operator supervision required. Deployment wiring (device, setup, pinned
+parameters file, interpreter, timeout policy) lives in `configs/` and the
+launch scripts; the wrapper generator is `codegen/generate_wrappers.py`
+(run it under an SCQO venv after any SCQO catalog change).
+
+Upstream README follows.
+
+---
 
 Part of [NVIDIA Ising](https://github.com/NVIDIA/Ising). This is a reference agent blueprint for AI-powered quantum device calibration. It provides an intelligent agent interface for discovering, executing, and analyzing quantum calibration experiments with support for automated workflows and vision-based analysis.
 

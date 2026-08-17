@@ -1,0 +1,3 @@
+# Deployment user overlay for the SIMULATED deployment (SCQO_USER_CONFIG).
+# Replaces the operator's personal ~/.scqo/user.toml for agent runs.
+setup = "simulated"

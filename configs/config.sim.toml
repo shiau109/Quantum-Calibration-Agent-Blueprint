@@ -1,0 +1,12 @@
+# scqo-agent deployment: SIMULATED backend (chipA's `simulated` setup).
+# Selected via SCQO_AGENT_CONFIG by launch/run-sim.ps1.
+# The setup name lives in the paired user overlay (user.sim.toml) because
+# SCQO deliberately reads `setup` only from the user overlay, never [lab].
+
+[lab]
+device = "chipA"
+data_root = 'D:/qpu_data_dev'
+# Pinned parameters file (empty = pure code defaults). Without this line SCQO
+# falls back to the operator's personal ~/.scqo/parameters.toml, whose
+# standing defaults would silently change what the agent measures.
+parameters_file = 'D:/github/scqo-agent/configs/scqo_parameters.sim.toml'

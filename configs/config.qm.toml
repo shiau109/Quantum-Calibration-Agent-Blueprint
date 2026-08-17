@@ -1,0 +1,8 @@
+# scqo-agent deployment: QM backend (chipA's `qm_OPX1000` setup).
+# Phase C: review with the operator before first hardware use. QM children
+# must never be hard-killed - run-qm.ps1 sets the detach timeout policy.
+
+[lab]
+device = "chipA"
+data_root = 'D:/qpu_data_dev'
+parameters_file = 'D:/github/scqo-agent/configs/scqo_parameters.qm.toml'

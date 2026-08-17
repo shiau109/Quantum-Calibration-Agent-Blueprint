@@ -28,26 +28,27 @@ general:
       openai_api_path: "/chat"
       openai_api_v1_path: "/v1/chat/completions"
 
-# VLM (Vision Language Model) configuration
+# VLM (Vision Language Model) configuration — used by vlm_inspect to read
+# experiment plots. Default matches the agent brain (Anthropic).
 vlm:
-  provider: "nvidia"
-  model: "nvidia/ising-calibration-1-35b-a3b"
-  api_key_env: "NVIDIA_API_KEY"
-  temperature: 0.2
-  max_tokens: 32768
-  enable_thinking: false
+  provider: "anthropic"
+  model: "claude-opus-5"
+  api_key_env: "ANTHROPIC_API_KEY"
+  temperature: 0
+  max_tokens: 4096
 
 # Alternative VLM configs:
-# vlm:
-#   provider: "nvidia"
-#   model: "google/gemma-4-31b-it"
-#   api_key_env: "NVIDIA_API_KEY"
-#   temperature: 0
-#   max_tokens: 16384
-#
-# vlm:
-#   provider: "nvidia"
-#   model: "nvidia/llama-3.1-nemotron-nano-vl-8b-v1"
-#   api_key_env: "NVIDIA_API_KEY"
+# vlm:                                # lab-hosted Ising endpoint (if it serves vision)
+#   provider: "custom"
+#   endpoint: "http://10.21.19.201:28000/v1/chat/completions"
+#   model: "nvidia/NVIDIA-Ising-Calibration-1"
 #   temperature: 0
 #   max_tokens: 8192
+#
+# vlm:                                # NVIDIA API catalog
+#   provider: "nvidia"
+#   model: "nvidia/ising-calibration-1-35b-a3b"
+#   api_key_env: "NVIDIA_API_KEY"
+#   temperature: 0.2
+#   max_tokens: 32768
+#   enable_thinking: false

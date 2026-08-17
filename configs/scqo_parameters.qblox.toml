@@ -1,0 +1,3 @@
+# Pinned parameter defaults for the qblox deployment. Empty = code defaults.
+# Phase C: the operator may point config.qblox.toml at the lab's standing
+# parameters file instead.

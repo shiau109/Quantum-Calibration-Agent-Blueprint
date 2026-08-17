@@ -1,0 +1,8 @@
+# scqo-agent deployment: QBLOX backend (chipA's `qblox` setup).
+# Phase C: review with the operator before first hardware use, especially
+# whether a standing lab parameters file should replace the empty pin.
+
+[lab]
+device = "chipA"
+data_root = 'D:/qpu_data_dev'
+parameters_file = 'D:/github/scqo-agent/configs/scqo_parameters.qblox.toml'

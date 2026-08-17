@@ -10,17 +10,14 @@ Reference guide for running and analyzing quantum calibration experiments.
 ## Tools Available
 
 ### run_experiment
-Execute a quantum calibration experiment.
+Execute a quantum calibration experiment. **Always call
+`lab(action="schema", experiment_name=...)` first and use only the
+parameter names it returns for THAT experiment — never reuse names from a
+different experiment or from an example in a document.**
 ```python
 run_experiment(
-    experiment_name="resonator_spectroscopy",
-    params={
-        "center_freq": 6.0,
-        "span": 0.2,
-        "num_points": 101,
-        "power": -20,
-        "num_averages": 2000
-    }
+    experiment_name="scqo_resonator_spectroscopy",
+    params={"targets": ["q1"]}   # params beyond targets: from lab(action="schema")
 )
 ```
 Returns: `{"id": "...", "status": "success", "results": {...}, "plots": [...]}`

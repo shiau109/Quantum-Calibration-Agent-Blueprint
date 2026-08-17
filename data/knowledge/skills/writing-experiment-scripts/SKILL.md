@@ -7,12 +7,18 @@ description: Author new experiment scripts that are compatible with the lab syst
 
 How to create experiment scripts compatible with the lab system.
 
+**The `scqo_*` wrappers are GENERATED — never hand-edit them.** They come
+from `codegen/generate_wrappers.py` (run under an SCQO venv) and are
+regenerated whenever the SCQO catalog changes. This skill is for adding a
+NEW custom experiment outside the SCQO stack; anything touching SCQO
+experiments goes through the codegen.
+
 ## Quick Reference
 
 | Requirement | Details |
 |-------------|---------|
 | Location | Scripts directory (see system prompt) |
-| Function | ONE public function per file (no `_` prefix) |
+| Function | Every public function (no `_` prefix) becomes its own experiment |
 | Type hints | Required with `Annotated` bounds |
 | Docstring | Google-style with Args/Returns |
 | Return | Dict with `status`, `results`, `arrays`, `plots` |
@@ -295,7 +301,7 @@ qca experiments list --human
 Before running your script:
 
 - [ ] File is in the scripts directory
-- [ ] Only ONE public function (no `_` prefix)
+- [ ] Every function you want discoverable is public (no `_` prefix); note `qca experiments validate` previews only the first one per file
 - [ ] All parameters have type hints with `Annotated`
 - [ ] All parameters have default values (or are intentionally required)
 - [ ] Function has Google-style docstring

@@ -165,17 +165,14 @@ If no such node exists:
 
 3. **Gather context** from completed nodes and plan.md
 
-4. **Run the experiment** using `run_experiment`:
+4. **Run the experiment** using `run_experiment`. **Always call
+   `lab(action="schema", experiment_name=...)` first to get the real
+   parameter names for that specific experiment — never reuse parameter
+   names from a different experiment or from an example in this document.**
    ```python
    run_experiment(
-     experiment_name="resonator_spectroscopy",
-     params={
-       "center_freq": 6.0,
-       "span": 0.2,
-       "num_points": 101,
-       "power": -20,
-       "num_averages": 2000
-     }
+     experiment_name="scqo_resonator_spectroscopy",
+     params={"targets": ["q1"]}   # other params: from lab(action="schema")
    )
    ```
 
@@ -367,7 +364,7 @@ Executing node_1: Resonator Spectroscopy...
 [Calls: workflow(action="update", ..., data={"current_node": "node_1", "nodes.node_1.state": "running", ...})]
 [Calls: workflow(action="log", ..., event="node_started", node="node_1")]
 
-> Running experiment with center_freq=6.0 GHz, span=0.2 GHz
+> Running experiment (params from lab(action="schema"), not copied from this example)
 > Experiment complete: 20240315_103015_resonator
 > Analyzing plot with vlm_inspect...
 > VLM: "Clear dip visible at 5.823 GHz. SNR ~12."

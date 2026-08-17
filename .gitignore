@@ -71,3 +71,12 @@ fern/.fern/
 
 # Docs build
 docs/_build/
+
+# scqo-agent: run artifacts and local state stay out of git
+data/
+!data/knowledge/
+!data/workflows/
+*.h5
+output.log
+large_tool_results/
+.venv/

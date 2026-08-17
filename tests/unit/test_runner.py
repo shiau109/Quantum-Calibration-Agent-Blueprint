@@ -260,9 +260,13 @@ def error_experiment(
         with pytest.raises(RuntimeError, match="subprocess failed"):
             run_experiment("error_experiment", {"param1": 5.0}, temp_scripts_dir)
 
-    def test_invalid_json_output(self, temp_scripts_dir):
-        """Test handling of invalid JSON output."""
-        # Create a script that prints invalid JSON
+    def test_stray_print_before_result_recovers(self, temp_scripts_dir):
+        """A stray print before the result line no longer loses the run.
+
+        The runner falls back to the last stdout line that parses as a JSON
+        object, so a completed (possibly expensive) run survives stdout
+        pollution it cannot prevent (e.g. C-level writes to fd 1).
+        """
         bad_json_script = temp_scripts_dir / "bad_json_experiment.py"
         bad_json_script.write_text(
             '''
@@ -277,10 +281,29 @@ def bad_json_experiment(
 '''
         )
 
+        result = run_experiment("bad_json_experiment", {"param1": 5.0}, temp_scripts_dir)
+        assert result["status"] == "success"
+        assert result["results"]["result"] == 5.0
+
+    def test_no_json_at_all_still_fails(self, temp_scripts_dir):
+        """Output with no JSON object anywhere is still an error."""
+        no_json_script = temp_scripts_dir / "no_json_experiment.py"
+        no_json_script.write_text(
+            '''
+import sys
+
+def no_json_experiment(param1: float = 5.0) -> dict:
+    """Prints garbage and exits without a result."""
+    print("just noise")
+    sys.stdout.flush()
+    sys.exit(0)
+'''
+        )
+
         with pytest.raises(
             RuntimeError, match="Failed to parse experiment output as JSON"
         ):
-            run_experiment("bad_json_experiment", {"param1": 5.0}, temp_scripts_dir)
+            run_experiment("no_json_experiment", {"param1": 5.0}, temp_scripts_dir)
 
     def test_non_dict_output(self, temp_scripts_dir):
         """Test handling of non-dict return value."""
@@ -389,12 +412,17 @@ def failed_with_error_experiment(
 
     def test_custom_python_path(self, temp_scripts_dir):
         """Test using custom python path."""
-        # Mock subprocess to verify python_path is used
-        with patch("core.runner.subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0, stdout='{"status": "success", "data": {"result": 10.0}}'
-            )
+        import io
 
+        # Mock Popen (the runner pumps its pipes with threads) to verify
+        # python_path lands in argv[0].
+        fake_process = MagicMock()
+        fake_process.stdout = io.StringIO('{"status": "success", "data": {"result": 10.0}}')
+        fake_process.stderr = io.StringIO("")
+        fake_process.wait.return_value = 0
+        fake_process.pid = 12345
+
+        with patch("core.runner.subprocess.Popen", return_value=fake_process) as mock_popen:
             result = run_experiment(
                 "test_experiment",
                 {"param1": 5.0},
@@ -402,9 +430,9 @@ def failed_with_error_experiment(
                 python_path="/custom/python",
             )
 
-            # Verify custom python path was used
-            call_args = mock_run.call_args
+            call_args = mock_popen.call_args
             assert call_args[0][0][0] == "/custom/python"
+            assert result["status"] == "success"
 
     def test_python_interpreter_not_found(self, temp_scripts_dir):
         """Test handling of missing python interpreter."""

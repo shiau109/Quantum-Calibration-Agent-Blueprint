@@ -16,7 +16,10 @@
 """Subprocess experiment execution."""
 
 import json
+import os
 import subprocess
+import sys
+import threading
 from copy import deepcopy
 from pathlib import Path
 
@@ -24,6 +27,7 @@ import numpy as np
 
 from .discovery import get_experiment_schema
 from .models import ExperimentSchema, ParameterSpec
+from .procutil import terminate_tree
 
 
 def resolve_params(params: dict, schema: ExperimentSchema) -> dict:
@@ -131,6 +135,7 @@ def run_experiment(
     timeout: int = 300,
     python_path: str = None,
     log_file: Path = None,
+    extra_env: dict = None,
 ) -> dict:
     """Run an experiment in a subprocess.
 
@@ -139,8 +144,10 @@ def run_experiment(
         params: Parameters to pass to experiment
         scripts_dir: Directory containing experiment scripts
         timeout: Timeout in seconds (default 300)
-        python_path: Path to Python interpreter (default: 'python')
+        python_path: Path to Python interpreter (default: sys.executable)
         log_file: Optional path to write progress output (stderr) in real-time
+        extra_env: Optional environment variables merged over the parent's
+            for the child process (e.g. provenance ids)
 
     Returns:
         Result dictionary with status, results, arrays, plots, metadata
@@ -148,7 +155,9 @@ def run_experiment(
     Raises:
         ValueError: If experiment not found or validation fails
         RuntimeError: If subprocess execution fails
-        TimeoutError: If experiment exceeds timeout
+        TimeoutError: If experiment exceeds timeout and the timeout policy
+            is "kill" (with SCQO_AGENT_TIMEOUT_POLICY=detach a synthesized
+            failed result is returned instead and the child keeps running)
     """
     # Get experiment schema
     schema = get_experiment_schema(name, scripts_dir)
@@ -167,146 +176,199 @@ def run_experiment(
     module_path = Path(schema.module_path)
     module_name = module_path.stem
 
-    # Build subprocess command
-    # Use Python code passed to -c that imports the function and calls it
-    # Insert the parent of scripts_dir so relative imports within the package work
-    scripts_parent = str(Path(scripts_dir).parent)
-    package_name = Path(scripts_dir).name
+    # Build subprocess command: Python code passed to -c that imports the
+    # function and calls it. Paths are embedded as repr'd POSIX strings —
+    # raw Windows paths inside quoted literals are backslash escapes
+    # (C:\Users -> \U -> SyntaxError in the child).
+    #
+    # scripts_dir's parent makes the package-qualified import work; scripts_dir
+    # itself makes the scripts' own bare imports (e.g. `from _scqo_runtime
+    # import ...`) resolve regardless of the child's working directory.
+    scripts_dir_resolved = Path(scripts_dir).resolve()
+    scripts_parent = scripts_dir_resolved.parent.as_posix()
+    scripts_dir_posix = scripts_dir_resolved.as_posix()
+    package_name = scripts_dir_resolved.name
+    # Package-qualified import keeps intra-package relative imports working,
+    # but only exists when the directory name is a legal identifier; with
+    # scripts_dir itself on sys.path the direct module import always works.
+    if package_name.isidentifier():
+        import_stmt = f"from {package_name}.{module_name} import {name}"
+    else:
+        import_stmt = f"from {module_name} import {name}"
     python_code = f"""
 import sys, json
-sys.path.insert(0, '{scripts_parent}')
-from {package_name}.{module_name} import {name}
+sys.path.insert(0, {scripts_parent!r})
+sys.path.insert(0, {scripts_dir_posix!r})
+{import_stmt}
 params = json.loads(sys.stdin.read())
 result = {name}(**params)
 print(json.dumps(result))
 """
 
-    # Determine Python executable
-    python_executable = python_path or "python"
+    # Determine Python executable. Bare "python" is unreliable on Windows
+    # (Microsoft Store alias stub), so fall back to this interpreter.
+    python_executable = python_path or sys.executable
 
-    # Use Popen for real-time stderr streaming if log_file is provided
-    if log_file is not None:
-        return _run_with_logging(
-            python_executable, python_code, params, timeout, log_file
-        )
-
-    # Fallback to subprocess.run for simple case (no logging)
-    try:
-        process = subprocess.run(
-            [python_executable, "-c", python_code],
-            input=json.dumps(params),
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-
-        if process.returncode != 0:
-            error_msg = process.stderr.strip() if process.stderr else "Unknown error"
-            raise RuntimeError(f"Experiment subprocess failed: {error_msg}")
-
-        return _parse_and_validate_result(process.stdout)
-
-    except subprocess.TimeoutExpired:
-        raise TimeoutError(f"Experiment timed out after {timeout} seconds")
-    except FileNotFoundError:
-        raise RuntimeError(f"Python interpreter not found: {python_executable}")
+    return _run_subprocess(python_executable, python_code, params, timeout, log_file, extra_env)
 
 
-def _run_with_logging(
+def _run_subprocess(
     python_executable: str,
     python_code: str,
     params: dict,
     timeout: int,
-    log_file: Path,
+    log_file: Path = None,
+    extra_env: dict = None,
 ) -> dict:
-    """Run experiment with real-time stderr logging to file.
+    """Run the experiment child with thread-pumped pipes (portable).
 
-    Uses Popen to stream stderr to log file as it's generated,
-    enabling real-time progress monitoring.
+    Two daemon threads drain the child's pipes concurrently: stderr streams
+    line-by-line into the log file (live tailing) and stdout accumulates in
+    memory. Draining both at once is what prevents the classic deadlock where
+    a child blocks writing a large result (e.g. base64 plots > pipe buffer)
+    that the parent only reads after exit.
+
+    Timeout behaviour is governed by SCQO_AGENT_TIMEOUT_POLICY:
+      - "kill" (default): terminate the whole process tree, raise TimeoutError.
+      - "detach": stop waiting but leave the child running and keep draining
+        its pipes to EOF, returning a synthesized failed result. This exists
+        for hardware backends (QM) where killing a child mid-job orphans the
+        instrument-side job and wedges the gateway for every later run.
     """
-    import os
-    import select
-    import time
-
-    # Ensure log directory exists
-    log_file.parent.mkdir(parents=True, exist_ok=True)
-
-    # Use unbuffered Python output so prints flush immediately
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
+    # The child prints its JSON result to stdout; on Windows the default
+    # console encoding (cp1252) mangles non-ASCII in it.
+    env["PYTHONIOENCODING"] = "utf-8"
+    if extra_env:
+        env.update({k: str(v) for k, v in extra_env.items()})
+
+    log_fh = None
+    if log_file is not None:
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        log_fh = open(log_file, "w", encoding="utf-8")
+
+    stdout_chunks: list[str] = []
+    stderr_tail: list[str] = []
+
+    def _pump_stdout(stream):
+        while True:
+            chunk = stream.read(65536)
+            if not chunk:
+                break
+            stdout_chunks.append(chunk)
+
+    def _pump_stderr(stream):
+        for line in stream:
+            if log_fh is not None:
+                log_fh.write(line)
+                log_fh.flush()
+            else:
+                stderr_tail.append(line)
+                del stderr_tail[:-200]
 
     try:
-        with open(log_file, "w", encoding="utf-8") as log_fh:
-            process = subprocess.Popen(
-                [python_executable, "-c", python_code],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                env=env,
-            )
+        process = subprocess.Popen(
+            [python_executable, "-c", python_code],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=env,
+        )
+    except FileNotFoundError:
+        if log_fh is not None:
+            log_fh.close()
+        raise RuntimeError(f"Python interpreter not found: {python_executable}")
 
-            # Send params via stdin and close
+    readers = [
+        threading.Thread(target=_pump_stdout, args=(process.stdout,), daemon=True),
+        threading.Thread(target=_pump_stderr, args=(process.stderr,), daemon=True),
+    ]
+    for reader in readers:
+        reader.start()
+
+    try:
+        try:
             process.stdin.write(json.dumps(params))
             process.stdin.close()
+        except OSError:
+            pass  # child exited before reading stdin; its exit code tells the story
 
-            # Stream stderr to log file in real-time
-            stdout_data = []
-            start_time = time.time()
+        try:
+            returncode = process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            policy = os.environ.get("SCQO_AGENT_TIMEOUT_POLICY", "kill").strip().lower()
+            if policy == "detach":
+                # Reader threads are daemons and keep draining so the child
+                # can never block on a full pipe while it finishes its
+                # hardware cleanup on its own schedule.
+                message = (
+                    f"Timed out after {timeout}s. The experiment child process "
+                    f"(pid {process.pid}) was left running because "
+                    f"SCQO_AGENT_TIMEOUT_POLICY=detach — killing it mid-job can "
+                    f"orphan an instrument-side job. Do not retry; notify the "
+                    f"operator and wait for the child to finish."
+                )
+                if log_fh is not None:
+                    log_fh.write(f"\n[runner] {message}\n")
+                    log_fh.flush()
+                return {
+                    "status": "failed",
+                    "error": message,
+                    "results": {"detached_pid": process.pid, "timeout_s": timeout},
+                    "arrays": {},
+                    "plots": [],
+                }
+            terminate_tree(process.pid)
+            raise TimeoutError(f"Experiment timed out after {timeout} seconds")
 
-            while True:
-                # Check timeout
-                elapsed = time.time() - start_time
-                if elapsed > timeout:
-                    process.kill()
-                    raise TimeoutError(f"Experiment timed out after {timeout} seconds")
+        for reader in readers:
+            reader.join(timeout=10)
 
-                # Check if process has finished
-                if process.poll() is not None:
-                    break
-
-                # Read available stderr and write to log immediately
-                try:
-                    # Use select for non-blocking read (Unix)
-                    readable, _, _ = select.select([process.stderr], [], [], 0.1)
-                    if readable:
-                        line = process.stderr.readline()
-                        if line:
-                            log_fh.write(line)
-                            log_fh.flush()
-                except (AttributeError, ValueError):
-                    # Fallback for Windows or if select fails
-                    time.sleep(0.1)
-
-            # Read any remaining stderr
-            remaining_stderr = process.stderr.read()
-            if remaining_stderr:
-                log_fh.write(remaining_stderr)
-                log_fh.flush()
-
-            # Read stdout (JSON result)
-            stdout_content = process.stdout.read()
-
-            if process.returncode != 0:
-                # Read log file for error context
+        if returncode != 0:
+            if log_fh is not None:
                 log_fh.flush()
                 error_context = log_file.read_text(encoding="utf-8")[-500:]
-                raise RuntimeError(
-                    f"Experiment subprocess failed (exit {process.returncode}): {error_context}"
-                )
+            else:
+                error_context = "".join(stderr_tail)[-500:] or "Unknown error"
+            raise RuntimeError(
+                f"Experiment subprocess failed (exit {returncode}): {error_context}"
+            )
 
-            return _parse_and_validate_result(stdout_content)
-
-    except FileNotFoundError:
-        raise RuntimeError(f"Python interpreter not found: {python_executable}")
+        return _parse_and_validate_result("".join(stdout_chunks))
+    finally:
+        if log_fh is not None:
+            log_fh.close()
 
 
 def _parse_and_validate_result(stdout: str) -> dict:
-    """Parse JSON output and validate result structure."""
+    """Parse JSON output and validate result structure.
+
+    The whole stdout should be exactly one JSON document. If it is not —
+    a C-level library wrote to fd 1 past Python's redirect_stdout, or a
+    stray print survived — fall back to the last line that parses as a
+    JSON object, since the contract puts the result print last.
+    """
     try:
         result = json.loads(stdout)
     except json.JSONDecodeError as e:
-        raise RuntimeError(f"Failed to parse experiment output as JSON: {e}")
+        result = None
+        for line in reversed(stdout.splitlines()):
+            line = line.strip()
+            if not line.startswith("{"):
+                continue
+            try:
+                candidate = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(candidate, dict):
+                result = candidate
+                break
+        if result is None:
+            raise RuntimeError(f"Failed to parse experiment output as JSON: {e}")
 
     if not isinstance(result, dict):
         raise RuntimeError("Experiment must return a dictionary")

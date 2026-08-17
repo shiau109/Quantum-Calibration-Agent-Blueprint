@@ -25,7 +25,7 @@ from core.discovery import (
     get_experiment_schema,
     validate_script,
     _eval_default,
-    _extract_schema_from_file,
+    _extract_schemas_from_file,
     _parse_function_parameters,
 )
 
@@ -59,6 +59,41 @@ class TestDiscoverExperiments:
         (tmp_path / "_private.py").write_text("def _private() -> dict: pass")
         experiments = discover_experiments(tmp_path)
         assert len(experiments) == 0
+
+    def test_discover_multiple_functions_per_file(self, tmp_path):
+        """Every qualifying public function in one file is its own experiment."""
+        (tmp_path / "combo.py").write_text(
+            '''
+def _helper(x: float = 1.0) -> dict:
+    return {}
+
+def exp_alpha(amplitude: float = 0.5) -> dict:
+    """First experiment."""
+    return {}
+
+def exp_beta(frequency: float = 5.0) -> dict:
+    """Second experiment."""
+    return {}
+'''
+        )
+        experiments = discover_experiments(tmp_path)
+        names = sorted(e.name for e in experiments)
+        assert names == ["exp_alpha", "exp_beta"]
+
+    def test_unqualified_functions_skipped_within_file(self, tmp_path):
+        """A public function without `-> dict` doesn't block later ones."""
+        (tmp_path / "mixed.py").write_text(
+            '''
+def not_an_experiment(x: float = 1.0) -> str:
+    return ""
+
+def real_experiment(amplitude: float = 0.5) -> dict:
+    """The one that qualifies."""
+    return {}
+'''
+        )
+        schemas = _extract_schemas_from_file(tmp_path / "mixed.py")
+        assert [s.name for s in schemas] == ["real_experiment"]
 
     def test_discover_multiple_scripts(self, tmp_path):
         """Discover multiple experiment scripts."""

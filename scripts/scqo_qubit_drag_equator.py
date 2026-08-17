@@ -5,29 +5,31 @@ from typing import Annotated
 from _scqo_runtime import run_scqo
 
 
-def scqo_qubit_spectroscopy(
+def scqo_qubit_drag_equator(
     targets: list,
     reset_method: str = 'thermal',
     thermalization_time_ns: float = None,
     active_reset_rounds: Annotated[int, (1, 15)] = 1,
     num_averages: int = 100,
-    frequency_span_hz: float = 60000000.0,
-    num_points: int = 201,
-    drive_power_dbm: float = -25.0,
-    drive_len_ns: float = None,
+    min_beta: float = -0.5,
+    max_beta: float = 0.5,
+    num_beta_points: int = 41,
+    pulse_repetitions: int = 3,
+    target_gate: str = 'x180',
 ) -> dict:
-    """Sweep a weak saturation drive around drive_freq_hz and fit the response peaks; the strongest peak recalibrates the drive channel's drive_freq_hz (coarse two-tone — run after resonator spectroscopy and before power Rabi / Ramsey)."""
+    """Sweep the DRAG beta coefficient and play three sequences (Seq 0: X90-(Y180)^N, Seq 1: X90-(-Y180)^N, Seq 2: X90-(X180)^N). The intersection of the three lines determines the optimal DRAG beta."""
     return run_scqo(
-        "qubit_spectroscopy",
+        "qubit_drag_equator",
         {
             "targets": targets,
             "reset_method": reset_method,
             "thermalization_time_ns": thermalization_time_ns,
             "active_reset_rounds": active_reset_rounds,
             "num_averages": num_averages,
-            "frequency_span_hz": frequency_span_hz,
-            "num_points": num_points,
-            "drive_power_dbm": drive_power_dbm,
-            "drive_len_ns": drive_len_ns,
+            "min_beta": min_beta,
+            "max_beta": max_beta,
+            "num_beta_points": num_beta_points,
+            "pulse_repetitions": pulse_repetitions,
+            "target_gate": target_gate,
         },
     )

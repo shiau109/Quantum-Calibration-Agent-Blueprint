@@ -29,7 +29,7 @@ from core.discovery import discover_experiments
 REPO = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = REPO / "scripts"
 
-EXPECTED_WRAPPERS = 37
+EXPECTED_WRAPPERS = 44
 LEGAL_TYPES = {"int", "float", "str", "bool", "list", "dict"}
 
 

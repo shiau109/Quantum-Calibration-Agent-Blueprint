@@ -123,8 +123,15 @@ def _param_entry(name: str, prop: dict, required: bool) -> dict:
         # let scqo enforce them (the doc still shows them).
         annotated = None
 
-    if required:
+    if name == "targets":
         signature = f"{name}: {py_type}"
+    elif required:
+        # Required, but NOT targets. QCA's discovery grammar allows exactly one
+        # required parameter, so these are emitted with a None default and scqo
+        # raises the missing-field error instead — the same division of labour
+        # every other rule here uses ("scqo revalidates everything"). The API
+        # doc still marks the row **required**, which is what the agent reads.
+        signature = f"{name}: {py_type} = None"
     elif annotated is not None:
         signature = f"{name}: Annotated[{py_type}, ({annotated[0]!r}, {annotated[1]!r})] = {default!r}"
     else:
@@ -242,9 +249,22 @@ def generate() -> None:
             "",
         ]
 
+    # An experiment REMOVED from the catalog must lose its wrapper, or the agent
+    # keeps offering a tool whose run_scqo raises KeyError("Unknown experiment")
+    # at call time — the failure qubit_spectroscopy_overlap's deletion produced.
+    # Sweeping here rather than warning: scripts/scqo_*.py is generated output,
+    # so anything not in the catalog is by definition stale.
+    kept = {p.name for p in written}
+    orphans = [p for p in sorted(SCRIPTS_DIR.glob("scqo_*.py")) if p.name not in kept]
+    for path in orphans:
+        path.unlink()
+
     API_DOC.parent.mkdir(parents=True, exist_ok=True)
     API_DOC.write_text("\n".join(doc_sections), encoding="utf-8")
     print(f"wrote {len(written)} wrappers + {API_DOC.relative_to(REPO)}")
+    if orphans:
+        print("removed (no longer in the catalog): "
+              + ", ".join(p.name for p in orphans))
 
     self_check(len(entries))
 

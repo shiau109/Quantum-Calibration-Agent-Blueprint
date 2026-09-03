@@ -13,6 +13,7 @@ def scqo_qubit_tomography(
     num_averages: int = 100,
     qubit_configs: dict = None,
     gate_counts: list = None,
+    interleave_noise: bool = True,
     symmetrized_readout: bool = True,
     num_training_shots: int = 2000,
 ) -> dict:
@@ -27,6 +28,7 @@ def scqo_qubit_tomography(
             "num_averages": num_averages,
             "qubit_configs": qubit_configs,
             "gate_counts": gate_counts,
+            "interleave_noise": interleave_noise,
             "symmetrized_readout": symmetrized_readout,
             "num_training_shots": num_training_shots,
         },

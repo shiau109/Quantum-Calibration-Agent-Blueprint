@@ -5,9 +5,10 @@ from _scqo_runtime import run_scqo
 
 def scqo_resonator_spectroscopy_power_amp(
     targets: list,
+    start_readout_detuning_hz: float = -10000000.0,
+    end_readout_detuning_hz: float = 10000000.0,
+    num_readout_freq_points: int = 101,
     num_averages: int = 100,
-    frequency_span_hz: float = 20000000.0,
-    num_freq_points: int = 101,
     max_power_dbm: float = -20.0,
     min_power_dbm: float = -50.0,
     num_power_points: int = 21,
@@ -19,9 +20,10 @@ def scqo_resonator_spectroscopy_power_amp(
         "resonator_spectroscopy_power_amp",
         {
             "targets": targets,
+            "start_readout_detuning_hz": start_readout_detuning_hz,
+            "end_readout_detuning_hz": end_readout_detuning_hz,
+            "num_readout_freq_points": num_readout_freq_points,
             "num_averages": num_averages,
-            "frequency_span_hz": frequency_span_hz,
-            "num_freq_points": num_freq_points,
             "max_power_dbm": max_power_dbm,
             "min_power_dbm": min_power_dbm,
             "num_power_points": num_power_points,
